@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: mintly_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mintly_db
+      POSTGRES_USER: mintly_user
+      POSTGRES_PASSWORD: mintly_secure_password_2026
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    container_name: mintly_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mintly_backend
+    restart: unless-stopped
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py seed_demo_data &&
+             python manage.py runserver 0.0.0.0:8000"
+    environment:
+      DEBUG: "True"
+      DJANGO_SECRET_KEY: "django-insecure-mintly-docker-secret-key-prod-2026"
+      ALLOWED_HOSTS: "*"
+      DATABASE_URL: "postgres://mintly_user:mintly_secure_password_2026@db:5432/mintly_db"
+      CELERY_BROKER_URL: "redis://redis:6379/0"
+      CELERY_RESULT_BACKEND: "redis://redis:6379/0"
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mintly_celery
+    restart: unless-stopped
+    command: celery -A config worker -l info
+    environment:
+      DATABASE_URL: "postgres://mintly_user:mintly_secure_password_2026@db:5432/mintly_db"
+      CELERY_BROKER_URL: "redis://redis:6379/0"
+      CELERY_RESULT_BACKEND: "redis://redis:6379/0"
+    depends_on:
+      - backend
+      - redis
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mintly_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
