@@ -3,12 +3,12 @@
 > **"Plan. Track. Save. Live Better."**  
 > *Know how much you can spend today without losing control of your monthly budget.*
 
-[![Vercel Deployment](https://img.shields.io/badge/Vercel-Live%20Demo-35E6A0?style=for-the-badge&logo=vercel&logoColor=black)](https://mintly-frontend.vercel.app)
+[![Vercel Deployment](https://img.shields.io/badge/Vercel-Live%20Demo-35E6A0?style=for-the-badge&logo=vercel&logoColor=black)](https://frontend-omega-beige-68.vercel.app)
 [![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/uddyalokb700-cmk/Mintly)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 
-🌐 **Live Vercel Application:** [https://mintly-frontend.vercel.app](https://mintly-frontend.vercel.app)  
-✨ **Instant Live Demo:** [https://mintly-frontend.vercel.app/welcome](https://mintly-frontend.vercel.app/welcome) *(Click **"Try Live Demo"** for instant interactive access — no login or backend spin-up required!)*
+🌐 **Live Vercel Application:** [https://frontend-omega-beige-68.vercel.app](https://frontend-omega-beige-68.vercel.app)  
+✨ **Instant Live Demo:** [https://frontend-omega-beige-68.vercel.app/welcome](https://frontend-omega-beige-68.vercel.app/welcome) *(Click **"Try Live Demo"** for instant interactive access — no login or backend spin-up required!)*
 
 ---
 
@@ -139,7 +139,7 @@ Frontend will be accessible at: `http://127.0.0.1:5173/`
 To test Mintly instantly without manual credential setup:
 
 ### 🌐 Option A: Live Vercel Deployment (Zero-Install)
-1. Navigate directly to **[https://mintly-frontend.vercel.app/welcome](https://mintly-frontend.vercel.app/welcome)**.
+1. Navigate directly to **[https://frontend-omega-beige-68.vercel.app/welcome](https://frontend-omega-beige-68.vercel.app/welcome)**.
 2. Click **"Try Live Demo"** (or click **"One-Click Demo Access"** on the Sign In page).
 3. The application will immediately launch the interactive financial workspace in your browser without requiring a backend spin-up.
 
