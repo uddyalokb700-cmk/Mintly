@@ -95,4 +95,28 @@ export const api = {
       method: 'DELETE',
       body: body ? JSON.stringify(body) : undefined,
     }),
+
+  upload: async <T>(endpoint: string, file: File, category: string = 'receipts'): Promise<T> => {
+    const token = localStorage.getItem('mintly_token');
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('category', category);
+
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Token ${token}`;
+    }
+
+    const response = await fetch(`${BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new ApiError(response.status, data);
+    }
+    return data as T;
+  },
 };

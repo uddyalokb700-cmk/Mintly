@@ -33,6 +33,8 @@ class Transaction(models.Model):
     payment_method = models.CharField(max_length=50, choices=PAYMENT_CHOICES, default='UPI')
     transaction_date = models.DateField(db_index=True)
     transaction_time = models.TimeField(null=True, blank=True)
+    receipt_key = models.CharField(max_length=500, blank=True, default='')
+    receipt_url = models.CharField(max_length=1000, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

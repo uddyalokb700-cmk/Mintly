@@ -1,8 +1,18 @@
 import os
+import sys
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load local Neon configuration (.env.local has priority, then .env)
+env_local = BASE_DIR.parent / '.env.local'
+env_file = BASE_DIR.parent / '.env'
+if env_local.exists():
+    load_dotenv(env_local)
+if env_file.exists():
+    load_dotenv(env_file)
 
 SECRET_KEY = os.environ.get(
     'DJANGO_SECRET_KEY',
@@ -37,6 +47,7 @@ INSTALLED_APPS = [
     'apps.transactions.apps.TransactionsConfig',
     'apps.analytics.apps.AnalyticsConfig',
     'apps.notifications.apps.NotificationsConfig',
+    'apps.storage.apps.StorageConfig',
 ]
 
 MIDDLEWARE = [
@@ -73,40 +84,59 @@ WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 
 # Database configuration: support PostgreSQL through DATABASE_URL, fallback to SQLite
-DATABASE_URL = os.environ.get('DATABASE_URL')
+# Per Neon Best Practices:
+# - Schema migrations / DDL: Direct (non-pooled) connection string (DATABASE_URL_UNPOOLED)
+# - Web application serving: Pooled connection string (DATABASE_URL) with CONN_MAX_AGE=0
+is_test = 'test' in sys.argv
+is_migration_command = any(arg in sys.argv for arg in ['migrate', 'makemigrations', 'showmigrations', 'sqlmigrate'])
+unpooled_url = os.environ.get('DATABASE_URL_UNPOOLED')
+pooled_url = os.environ.get('DATABASE_URL')
 
-if DATABASE_URL and DATABASE_URL.startswith(('postgres://', 'postgresql://')):
-    parsed_db = urlparse(DATABASE_URL)
-    options = {}
-    query_params = parse_qs(parsed_db.query)
-    if 'sslmode' in query_params:
-        options['sslmode'] = query_params['sslmode'][0]
-    elif parsed_db.hostname not in ('localhost', '127.0.0.1', 'db'):
-        options['sslmode'] = 'require'
-
-    # Neon PgBouncer recommendation: default CONN_MAX_AGE to 0 when using pooler
-    default_conn_age = '0' if 'pooler' in (parsed_db.hostname or '') else '60'
-    conn_max_age = int(os.environ.get('DB_CONN_MAX_AGE', default_conn_age))
-
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': parsed_db.path[1:],
-            'USER': parsed_db.username,
-            'PASSWORD': parsed_db.password,
-            'HOST': parsed_db.hostname,
-            'PORT': parsed_db.port or '5432',
-            'OPTIONS': options,
-            'CONN_MAX_AGE': conn_max_age,
-        }
-    }
-else:
+if is_test:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+            'NAME': ':memory:',
         }
     }
+elif is_migration_command and unpooled_url:
+    DATABASE_URL = unpooled_url
+else:
+    DATABASE_URL = pooled_url or unpooled_url
+
+if not is_test:
+    if DATABASE_URL and DATABASE_URL.startswith(('postgres://', 'postgresql://')):
+        parsed_db = urlparse(DATABASE_URL)
+        options = {}
+        query_params = parse_qs(parsed_db.query)
+        if 'sslmode' in query_params:
+            options['sslmode'] = query_params['sslmode'][0]
+        elif parsed_db.hostname not in ('localhost', '127.0.0.1', 'db'):
+            options['sslmode'] = 'require'
+
+        # Neon PgBouncer recommendation: default CONN_MAX_AGE to 0 when using pooler
+        default_conn_age = '0' if 'pooler' in (parsed_db.hostname or '') else '60'
+        conn_max_age = int(os.environ.get('DB_CONN_MAX_AGE', default_conn_age))
+
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': parsed_db.path[1:],
+                'USER': parsed_db.username,
+                'PASSWORD': parsed_db.password,
+                'HOST': parsed_db.hostname,
+                'PORT': parsed_db.port or '5432',
+                'OPTIONS': options,
+                'CONN_MAX_AGE': conn_max_age,
+            }
+        }
+    else:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
 
 AUTH_USER_MODEL = 'users.User'
 
@@ -222,3 +252,11 @@ CELERY_TIMEZONE = 'UTC'
 QSTASH_CURRENT_SIGNING_KEY = os.environ.get('QSTASH_CURRENT_SIGNING_KEY', '')
 QSTASH_NEXT_SIGNING_KEY = os.environ.get('QSTASH_NEXT_SIGNING_KEY', '')
 QSTASH_TOKEN = os.environ.get('QSTASH_TOKEN', '')
+
+# Neon Object Storage (S3-compatible) Configuration
+AWS_ENDPOINT_URL_S3 = os.environ.get('AWS_ENDPOINT_URL_S3', '')
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID', '')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+AWS_REGION = os.environ.get('AWS_REGION', 'ap-southeast-1')
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', 'assets')
+NEON_OBJECT_STORAGE_ENABLED = bool(AWS_ENDPOINT_URL_S3 and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)

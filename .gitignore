@@ -67,3 +67,4 @@ frontend/dist-ssr/
 backups/
 *.sql
 *.sql.gz
+.neon

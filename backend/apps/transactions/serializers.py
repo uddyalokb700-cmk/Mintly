@@ -30,6 +30,8 @@ class TransactionSerializer(serializers.ModelSerializer):
             'payment_method',
             'transaction_date',
             'transaction_time',
+            'receipt_key',
+            'receipt_url',
             'created_at',
             'updated_at',
         ]

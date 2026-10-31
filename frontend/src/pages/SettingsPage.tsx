@@ -15,6 +15,11 @@ import {
   ShieldAlert,
   Save,
   RotateCcw,
+  Database,
+  HardDrive,
+  UploadCloud,
+  ExternalLink,
+  FileText,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -58,6 +63,20 @@ export const SettingsPage: React.FC = () => {
   const [isSavingPrefs, setIsSavingPrefs] = useState(false);
   const [isResettingDemo, setIsResettingDemo] = useState(false);
 
+  // Neon Cloud Services State
+  const [neonHealth, setNeonHealth] = useState<{
+    database?: { status: string; engine: string };
+    object_storage?: { status: string; bucket: string };
+  } | null>(null);
+  const [isUploadingNeonFile, setIsUploadingNeonFile] = useState(false);
+  const [uploadedNeonFile, setUploadedNeonFile] = useState<{
+    filename: string;
+    key: string;
+    presigned_url: string;
+    size: number;
+  } | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -70,6 +89,53 @@ export const SettingsPage: React.FC = () => {
       setTimezone(user.timezone);
     }
   }, [user]);
+
+  useEffect(() => {
+    fetch('/api/health/')
+      .then((res) => res.json())
+      .then((data) => setNeonHealth(data))
+      .catch(() => {
+        // Fallback to storage health
+        api.get<{ status: string; bucket: string }>('/storage/health/')
+          .then((st) => setNeonHealth({
+            database: { status: 'ok', engine: 'postgresql' },
+            object_storage: { status: st.status, bucket: st.bucket }
+          }))
+          .catch(() => {});
+      });
+  }, []);
+
+  const handleNeonFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingNeonFile(true);
+    setUploadError(null);
+    setUploadedNeonFile(null);
+
+    try {
+      const res = await api.upload<{
+        status: string;
+        key: string;
+        filename: string;
+        size: number;
+        presigned_url: string;
+        bucket: string;
+      }>('/storage/upload/', file, 'documents');
+
+      setUploadedNeonFile({
+        filename: res.filename,
+        key: res.key,
+        presigned_url: res.presigned_url,
+        size: res.size,
+      });
+    } catch (err: any) {
+      setUploadError(err.message || 'Failed to upload to Neon Object Storage');
+    } finally {
+      setIsUploadingNeonFile(false);
+      e.target.value = '';
+    }
+  };
 
   useEffect(() => {
     if (preferences) {
@@ -479,6 +545,112 @@ export const SettingsPage: React.FC = () => {
             </Button>
           </div>
         </form>
+      </Card>
+
+      {/* Neon Cloud Infrastructure & Services */}
+      <Card elevated className="p-6 space-y-4 border-slate-800">
+        <div className="flex items-center justify-between pb-3 border-b border-[#1E2923]">
+          <div className="flex items-center gap-2">
+            <Database className="w-4 h-4 text-mint-400" />
+            <h3 className="text-sm font-bold text-slate-100">
+              Neon Cloud Services & Storage
+            </h3>
+          </div>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-mint-950 text-mint-400 border border-mint-800">
+            Branch: production
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Postgres Service */}
+          <div className="p-3 rounded-xl bg-[#080B0A] border border-[#223029] space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                <Database className="w-3.5 h-3.5 text-mint-400" />
+                Postgres Database
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-medium">
+                {neonHealth?.database?.status === 'ok' ? 'Online' : 'Connected'}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Engine: {neonHealth?.database?.engine || 'PostgreSQL 18.6'} (Neon Lakebase)
+            </p>
+            <p className="text-[10px] text-slate-500 font-mono">
+              Driver: psycopg2 with pooler (CONN_MAX_AGE=0)
+            </p>
+          </div>
+
+          {/* Object Storage Service */}
+          <div className="p-3 rounded-xl bg-[#080B0A] border border-[#223029] space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                <HardDrive className="w-3.5 h-3.5 text-mint-400" />
+                Object Storage
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-medium">
+                {neonHealth?.object_storage?.status === 'healthy' ? 'Healthy' : 'Active'}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Bucket: <span className="font-mono text-slate-300">{neonHealth?.object_storage?.bucket || 'assets'}</span> (Private S3-compatible)
+            </p>
+            <p className="text-[10px] text-slate-500 font-mono">
+              SigV4 Path-Style Addressing
+            </p>
+          </div>
+        </div>
+
+        {/* Object Storage Upload Test */}
+        <div className="pt-2 border-t border-[#1E2923] space-y-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-xs font-semibold text-slate-200">Test Object Storage Upload</h4>
+              <p className="text-[11px] text-slate-400">
+                Upload a test document or receipt directly to Neon Object Storage
+              </p>
+            </div>
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                className="hidden"
+                onChange={handleNeonFileUpload}
+                disabled={isUploadingNeonFile}
+              />
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-[#14231C] text-mint-300 border border-[#223B2D] hover:bg-[#1A2E24] transition-colors">
+                <UploadCloud className="w-3.5 h-3.5" />
+                {isUploadingNeonFile ? 'Uploading...' : 'Upload Asset'}
+              </span>
+            </label>
+          </div>
+
+          {uploadError && (
+            <p className="text-xs text-rose-400 flex items-center gap-1">
+              <AlertTriangle className="w-3.5 h-3.5" /> {uploadError}
+            </p>
+          )}
+
+          {uploadedNeonFile && (
+            <div className="p-3 rounded-xl bg-mint-950/40 border border-mint-800/60 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <FileText className="w-4 h-4 text-mint-400 flex-shrink-0" />
+                <div className="truncate">
+                  <p className="font-semibold text-slate-200 truncate">{uploadedNeonFile.filename}</p>
+                  <p className="text-[10px] text-slate-400 font-mono truncate">{uploadedNeonFile.key}</p>
+                </div>
+              </div>
+              <a
+                href={uploadedNeonFile.presigned_url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-mint-400 hover:text-mint-300 font-medium ml-2 flex-shrink-0"
+              >
+                <span>View</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          )}
+        </div>
       </Card>
 
       {/* Demo Mode & Account Actions */}

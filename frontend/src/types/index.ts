@@ -85,6 +85,8 @@ export interface Transaction {
   payment_method: 'UPI' | 'Card' | 'Cash' | 'Bank Transfer' | 'Other';
   transaction_date: string;
   transaction_time: string | null;
+  receipt_key?: string;
+  receipt_url?: string;
   created_at: string;
   updated_at: string;
 }
