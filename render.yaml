@@ -1,0 +1,44 @@
+# ==============================================================================
+# Mintly Render Infrastructure Blueprint (render.yaml)
+# Defines the free-tier Django Web Service for Render deployment
+# ==============================================================================
+
+services:
+  - type: web
+    name: mintly-backend
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: "pip install -r backend/requirements.txt && python backend/manage.py collectstatic --noinput && python backend/manage.py migrate"
+    startCommand: "gunicorn --chdir backend config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
+    healthCheckPath: /api/health/
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com,localhost,127.0.0.1"
+      - key: DATABASE_URL
+        sync: false # Set in Render Dashboard with Neon PostgreSQL URL
+      - key: DB_CONN_MAX_AGE
+        value: "0"  # Recommended 0 for Neon PgBouncer transaction pooling
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false # Set in Render Dashboard (e.g., https://mintly.vercel.app)
+      - key: CSRF_TRUSTED_ORIGINS
+        sync: false # Set in Render Dashboard (e.g., https://mintly.vercel.app)
+      - key: QSTASH_CURRENT_SIGNING_KEY
+        sync: false # Set in Render Dashboard from Upstash Console
+      - key: QSTASH_NEXT_SIGNING_KEY
+        sync: false # Set in Render Dashboard from Upstash Console
+      - key: QSTASH_TOKEN
+        sync: false # Optional pre-shared bearer token
+      - key: VAPID_PUBLIC_KEY
+        sync: false # Web Push VAPID public key
+      - key: VAPID_PRIVATE_KEY
+        sync: false # Web Push VAPID private key
+      - key: VAPID_CLAIM_EMAIL
+        value: "mailto:notifications@mintly.app"

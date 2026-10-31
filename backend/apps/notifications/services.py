@@ -180,3 +180,69 @@ def send_morning_greeting_notification(user, for_date=None):
     )
     broadcast_user_push(user, {'title': title, 'body': body, 'type': 'morning_greeting'})
     return notif
+
+def process_scheduled_morning_notifications(now_utc=None):
+    """
+    Evaluates all users with active morning reminders.
+    Converts current UTC time to each user's localized time.
+    Sends greeting if localized time is >= reminder_time and not already sent for today.
+    Guarantees idempotency via deduplication_key.
+    Returns detailed metrics dictionary.
+    """
+    import datetime
+    import pytz
+    from django.utils import timezone
+
+    if now_utc is None:
+        now_utc = timezone.now()
+
+    preferences = NotificationPreference.objects.filter(
+        morning_reminder_enabled=True
+    ).select_related('user')
+
+    results = {
+        'total_evaluated': 0,
+        'sent': 0,
+        'already_sent': 0,
+        'not_time_yet': 0,
+        'no_budget': 0,
+        'errors': 0,
+    }
+
+    for pref in preferences:
+        results['total_evaluated'] += 1
+        try:
+            user = pref.user
+            user_tz = pref.timezone or getattr(user, 'timezone', 'Asia/Kolkata') or 'Asia/Kolkata'
+            try:
+                tz = pytz.timezone(user_tz)
+            except Exception:
+                tz = pytz.timezone('Asia/Kolkata')
+
+            local_time = now_utc.astimezone(tz)
+            user_today = local_time.date()
+
+            # Parse reminder time (HH:MM)
+            r_hour, r_minute = [int(p) for p in pref.reminder_time.split(':')]
+            reminder_time_obj = datetime.time(r_hour, r_minute)
+
+            # Morning greetings are only sent during the morning window [reminder_time, 12:00 PM)
+            if local_time.time() < reminder_time_obj or local_time.time() >= datetime.time(12, 0):
+                results['not_time_yet'] += 1
+                continue
+
+            dedup_key = f"morning_greeting_{user.id}_{user_today}"
+            if Notification.objects.filter(user=user, deduplication_key=dedup_key).exists():
+                results['already_sent'] += 1
+                continue
+
+            notif = send_morning_greeting_notification(user, for_date=user_today)
+            if notif:
+                results['sent'] += 1
+            else:
+                results['no_budget'] += 1
+        except Exception as e:
+            logger.error(f"Error processing morning notification for user {pref.user_id}: {e}")
+            results['errors'] += 1
+
+    return results

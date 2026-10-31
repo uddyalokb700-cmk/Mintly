@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.urls import path, include
+from django.db import connection
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -7,8 +8,22 @@ from rest_framework.permissions import AllowAny
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def api_health(request):
+    db_status = 'ok'
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+    except Exception as exc:
+        db_status = f'error: {str(exc)}'
+        return Response({
+            'status': 'unhealthy',
+            'database': db_status,
+            'application': 'Mintly Personal Finance API',
+            'version': '1.0.0'
+        }, status=503)
+
     return Response({
         'status': 'healthy',
+        'database': db_status,
         'application': 'Mintly Personal Finance API',
         'version': '1.0.0'
     })

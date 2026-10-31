@@ -165,29 +165,45 @@ Services in Docker Compose:
 
 ---
 
-## 7. Automated Test Suite
+## 7. Production Readiness & Documentation
 
-Mintly includes 18 automated unit and integration tests covering:
-1. Monthly spendable budget calculation (`income - savings_target`).
-2. Correct daily allowances across 28, 29, 30, and 31-day months.
-3. Leap-year handling in February (e.g. 2028 vs 2027).
-4. Monetary rounding and exact paise reconciliation (`reconciled_sum == spendable_budget`).
-5. Rejection of invalid savings targets (exceeding income or negative).
-6. Daily remaining balance calculation.
-7. Negative daily balance and overspent alert flags when overspending.
-8. Monthly remaining budget tracking.
-9. Adaptive daily allowance adjustment based on remaining days.
-10. Dynamic balance recalculation after transaction editing.
-11. Dynamic balance recalculation after transaction deletion.
-12. Timezone-aware daily expense grouping.
-13. Month-boundary transaction filtering.
-14. Authentication enforcement on protected endpoints (401 Unauthorized).
-15. Prevention of cross-user data access (User A cannot view/edit/delete User B's records).
-16. Notification preference enforcement (quiet hours & disable alerts).
-17. Deduplication of alerts for identical events/dates.
-18. Graceful handling of failed Web Push delivery.
+Mintly is fully audited, security-hardened, and documented for real-world deployment. Complete operational documentation is available in the repository root:
 
-To run the test suite:
+- [PRODUCTION_AUDIT.md](file:///Users/uddyalokbiswas/Desktop/Mintly/PRODUCTION_AUDIT.md): Complete findings across Critical, High, Medium, and Low categories (all 14 issues remediated).
+- [DEPLOYMENT_GUIDE.md](file:///Users/uddyalokbiswas/Desktop/Mintly/DEPLOYMENT_GUIDE.md): Step-by-step production setup for Vercel, Railway/Render/Docker, PostgreSQL, Redis, Celery workers/beat, and VAPID.
+- [SECURITY_CHECKLIST.md](file:///Users/uddyalokbiswas/Desktop/Mintly/SECURITY_CHECKLIST.md): OWASP-aligned security verification (IDOR prevention, token hashing, rate limiting, and secure headers).
+- [TEST_REPORT.md](file:///Users/uddyalokbiswas/Desktop/Mintly/TEST_REPORT.md): Complete test run results, scenario validation details (Scenarios A–D), and bundle metrics.
+
+---
+
+## 8. Automated Test Suite
+
+Mintly includes 28 automated tests across financial calculation, security/IDOR prevention, and full end-to-end user lifecycles:
+
+1. **Monthly spendable budget calculation** (`income - savings_target`).
+2. **Correct daily allowances** across 28, 29, 30, and 31-day months.
+3. **Leap-year handling** in February (2024 has 29 days, 2025 has 28 days).
+4. **Monetary rounding & exact paise reconciliation** (`reconciled_sum == spendable_budget`).
+5. **Rejection of invalid savings targets** (exceeding income or negative).
+6. **Daily remaining balance calculation**.
+7. **Negative daily balance & overspent alert flags** when overspending.
+8. **Monthly remaining budget tracking**.
+9. **Adaptive daily allowance adjustment** based on remaining calendar days.
+10. **Dynamic balance recalculation** after transaction editing.
+11. **Dynamic balance recalculation** after transaction deletion.
+12. **Timezone-aware daily expense grouping**.
+13. **Month-boundary transaction filtering**.
+14. **Authentication enforcement** on protected endpoints (401 Unauthorized).
+15. **Prevention of cross-user data access** (User A cannot view/edit/delete User B's records).
+16. **Notification preference enforcement** (quiet hours & disable alerts).
+17. **Deduplication of alerts** for identical events/dates.
+18. **Graceful handling of failed Web Push delivery**.
+19. **Custom Category IDOR prevention** (User B cannot assign User A's private category).
+20. **Secure SHA-256 password reset tokens** and production token leak prevention.
+21. **Database health check validation** (`/api/health/` DB probe).
+22. **Complete 13-step End-to-End User Journey test** (Registration -> Budget -> Expenses -> Alerts -> Morning Greetings -> Analytics -> Logout/Login -> Persistence).
+
+To execute the automated test suite:
 ```bash
 source .venv/bin/activate
 python3 backend/manage.py test tests
@@ -195,7 +211,7 @@ python3 backend/manage.py test tests
 
 Expected output:
 ```
-Ran 18 tests in 1.794s
+Ran 28 tests in 3.319s
 OK
 ```
 

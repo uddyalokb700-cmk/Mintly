@@ -6,9 +6,9 @@ services:
     container_name: mintly_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: mintly_db
-      POSTGRES_USER: mintly_user
-      POSTGRES_PASSWORD: mintly_secure_password_2026
+      POSTGRES_DB: ${POSTGRES_DB:-mintly_db}
+      POSTGRES_USER: ${POSTGRES_USER:-mintly_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mintly_secure_password_2026}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -29,17 +29,16 @@ services:
     restart: unless-stopped
     command: >
       sh -c "python manage.py migrate &&
-             python manage.py seed_demo_data &&
-             python manage.py runserver 0.0.0.0:8000"
+             python manage.py collectstatic --noinput &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60"
     environment:
-      DEBUG: "True"
-      DJANGO_SECRET_KEY: "django-insecure-mintly-docker-secret-key-prod-2026"
-      ALLOWED_HOSTS: "*"
-      DATABASE_URL: "postgres://mintly_user:mintly_secure_password_2026@db:5432/mintly_db"
-      CELERY_BROKER_URL: "redis://redis:6379/0"
-      CELERY_RESULT_BACKEND: "redis://redis:6379/0"
-    volumes:
-      - ./backend:/app
+      DEBUG: ${DEBUG:-False}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-mintly-docker-secret-key-prod-2026}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      DATABASE_URL: ${DATABASE_URL:-postgres://mintly_user:mintly_secure_password_2026@db:5432/mintly_db}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost,http://localhost:80,http://127.0.0.1}
     ports:
       - "8000:8000"
     depends_on:
@@ -50,13 +49,30 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: mintly_celery
+    container_name: mintly_celery_worker
     restart: unless-stopped
     command: celery -A config worker -l info
     environment:
-      DATABASE_URL: "postgres://mintly_user:mintly_secure_password_2026@db:5432/mintly_db"
-      CELERY_BROKER_URL: "redis://redis:6379/0"
-      CELERY_RESULT_BACKEND: "redis://redis:6379/0"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-mintly-docker-secret-key-prod-2026}
+      DATABASE_URL: ${DATABASE_URL:-postgres://mintly_user:mintly_secure_password_2026@db:5432/mintly_db}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+    depends_on:
+      - backend
+      - redis
+
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mintly_celery_beat
+    restart: unless-stopped
+    command: celery -A config beat -l info
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-mintly-docker-secret-key-prod-2026}
+      DATABASE_URL: ${DATABASE_URL:-postgres://mintly_user:mintly_secure_password_2026@db:5432/mintly_db}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
     depends_on:
       - backend
       - redis

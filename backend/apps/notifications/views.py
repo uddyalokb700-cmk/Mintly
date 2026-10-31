@@ -101,3 +101,80 @@ class TriggerMorningGreetingView(views.APIView):
                 'notification': NotificationSerializer(notif).data
             })
         return Response({'message': 'Greeting already sent for today or conditions not met.'})
+
+class QStashNotificationProcessView(views.APIView):
+    """
+    Webhook endpoint invoked by Upstash QStash scheduled cron jobs.
+    Performs signature verification or pre-shared token validation.
+    Guarantees idempotency via database deduplication keys.
+    Processes morning notifications according to each user's localized timezone and reminder preferences.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        return Response({
+            'status': 'active',
+            'endpoint': 'Mintly QStash Scheduled Notifications Endpoint',
+            'message': 'Send a POST request with a valid Upstash-Signature header to trigger scheduled notification processing.'
+        })
+
+    def post(self, request):
+        import logging
+        logger = logging.getLogger(__name__)
+
+        current_key = getattr(settings, 'QSTASH_CURRENT_SIGNING_KEY', '').strip()
+        next_key = getattr(settings, 'QSTASH_NEXT_SIGNING_KEY', '').strip()
+        shared_token = getattr(settings, 'QSTASH_TOKEN', '').strip()
+
+        signature = (
+            request.headers.get('Upstash-Signature') or
+            request.headers.get('upstash-signature') or
+            request.META.get('HTTP_UPSTASH_SIGNATURE')
+        )
+
+        authenticated = False
+
+        # 1. Cryptographic QStash Signature Verification (Production)
+        if current_key and signature:
+            try:
+                from qstash import Receiver
+                receiver = Receiver(
+                    current_signing_key=current_key,
+                    next_signing_key=next_key or current_key
+                )
+                raw_body = request.body.decode('utf-8') if request.body else ""
+                receiver.verify(signature=signature, body=raw_body)
+                authenticated = True
+            except Exception as e:
+                logger.warning(f"QStash signature verification failed: {e}")
+                return Response(
+                    {'error': 'Invalid QStash signature', 'detail': str(e)},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+        # 2. Shared Token Fallback (Authorization: Bearer <QSTASH_TOKEN>)
+        if not authenticated and shared_token:
+            auth_header = request.headers.get('Authorization', '')
+            if auth_header == f"Bearer {shared_token}":
+                authenticated = True
+
+        # 3. Development / Testing Mode Bypass (if no keys configured and DEBUG=True)
+        if not authenticated:
+            if getattr(settings, 'DEBUG', False) and not (current_key or shared_token):
+                authenticated = True
+            else:
+                return Response(
+                    {'error': 'Unauthorized: Missing or invalid Upstash-Signature or Authorization token.'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+        # Execute idempotent, timezone-aware notification dispatch
+        from apps.notifications.services import process_scheduled_morning_notifications
+        stats = process_scheduled_morning_notifications()
+
+        return Response({
+            'status': 'success',
+            'message': f"Scheduled notifications evaluated. Sent: {stats['sent']}, Skipped (Already sent): {stats['already_sent']}.",
+            'stats': stats,
+            'timestamp': timezone.now().isoformat()
+        }, status=status.HTTP_200_OK)

@@ -81,7 +81,7 @@ class TransactionListCreateView(views.APIView):
         return paginator.get_paginated_response(serializer.data)
 
     def post(self, request):
-        serializer = TransactionSerializer(data=request.data)
+        serializer = TransactionSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             active_budget = Budget.objects.filter(user=request.user, status=Budget.STATUS_ACTIVE).first()
             tx_date = serializer.validated_data.get('transaction_date', get_user_today(request.user))
@@ -122,7 +122,7 @@ class TransactionDetailView(views.APIView):
 
     def patch(self, request, pk):
         tx = self.get_object(pk, request.user)
-        serializer = TransactionSerializer(tx, data=request.data, partial=True)
+        serializer = TransactionSerializer(tx, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             updated_tx = serializer.save()
             check_and_trigger_spending_alerts(request.user, updated_tx)

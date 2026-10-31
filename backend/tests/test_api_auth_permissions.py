@@ -140,3 +140,79 @@ class ApiAuthAndPermissionsTestCase(APITestCase):
         success = send_web_push(sub, {'title': 'Test Push', 'body': 'Hello'})
         # Should return False without throwing uncaught exceptions
         self.assertFalse(success)
+
+    def test_19_cross_user_custom_category_idor_prevention(self):
+        """User B cannot create or update a transaction with User A's custom category"""
+        from apps.categories.models import Category
+        # User A creates a private custom category
+        cat_a = Category.objects.create(
+            user=self.user_a,
+            name='Alice Secret Hobby',
+            category_type=Category.EXPENSE
+        )
+
+        # User B authenticates
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token_b.key}')
+
+        # User B attempts to create a transaction referencing Alice's custom category
+        response = self.client.post('/api/v1/transactions/', {
+            'amount': '250.00',
+            'category_id': str(cat_a.id),
+            'transaction_type': 'expense',
+            'description': 'Malicious cross-user category link'
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('category_id', response.data)
+
+    def test_20_hashed_password_reset_token_security(self):
+        """Password reset tokens are never leaked in production (DEBUG=False) and are hashed in DB"""
+        import hashlib
+        from django.test import override_settings
+        from apps.users.models import PasswordResetToken
+
+        # 1. Verify in production mode (DEBUG=False): token is NOT leaked in response
+        with override_settings(DEBUG=False):
+            prod_response = self.client.post('/api/v1/auth/password-reset/', {
+                'email': self.user_a.email
+            }, format='json')
+            self.assertEqual(prod_response.status_code, status.HTTP_200_OK)
+            self.assertNotIn('reset_token', prod_response.data)
+
+        # 2. Verify in debug mode: raw token is returned, but DB stores SHA-256 hash
+        with override_settings(DEBUG=True):
+            dev_response = self.client.post('/api/v1/auth/password-reset/', {
+                'email': self.user_a.email
+            }, format='json')
+            self.assertEqual(dev_response.status_code, status.HTTP_200_OK)
+            raw_token = dev_response.data.get('reset_token')
+            self.assertIsNotNone(raw_token)
+
+            # Verify that the DB record contains the SHA-256 hash, not the plaintext token
+            token_hash = hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
+            pr_record = PasswordResetToken.objects.filter(token=token_hash).first()
+            self.assertIsNotNone(pr_record)
+            self.assertEqual(pr_record.token, token_hash)
+            self.assertNotEqual(pr_record.token, raw_token)
+
+            # Confirm reset with raw token
+            confirm_resp = self.client.post('/api/v1/auth/password-reset/confirm/', {
+                'token': raw_token,
+                'new_password': 'AliceBrandNewPassword2026!',
+                'confirm_password': 'AliceBrandNewPassword2026!',
+            }, format='json')
+            self.assertEqual(confirm_resp.status_code, status.HTTP_200_OK)
+
+            # Verify user can log in with new password
+            login_resp = self.client.post('/api/v1/auth/login/', {
+                'email': self.user_a.email,
+                'password': 'AliceBrandNewPassword2026!'
+            }, format='json')
+            self.assertEqual(login_resp.status_code, status.HTTP_200_OK)
+
+    def test_21_database_health_check_endpoint(self):
+        """Health check endpoint validates database connectivity and returns 200"""
+        response = self.client.get('/api/health/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'healthy')
+        self.assertEqual(response.data['database'], 'ok')

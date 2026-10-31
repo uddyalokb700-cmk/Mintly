@@ -61,8 +61,12 @@ def ensure_user_setup(user):
     NotificationPreference.objects.get_or_create(user=user)
     seed_user_default_categories(user)
 
+import hashlib
+from django.conf import settings
+
 class RegisterView(views.APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_scope = 'auth'
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -80,6 +84,7 @@ class RegisterView(views.APIView):
 
 class LoginView(views.APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_scope = 'auth'
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -122,32 +127,44 @@ class MeView(views.APIView):
 
 class PasswordResetRequestView(views.APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_scope = 'auth'
 
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email'].lower().strip()
             user = User.objects.filter(email=email).first()
+            raw_token = None
             if user:
-                token_str = secrets.token_urlsafe(32)
+                raw_token = secrets.token_urlsafe(32)
+                token_hash = hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
                 expires = timezone.now() + timedelta(hours=1)
-                PasswordResetToken.objects.create(user=user, token=token_str, expires_at=expires)
-                # In production send email. In development, return reset token for testing ease
-                return Response({
-                    'message': 'Password reset link generated.',
-                    'reset_token': token_str
-                })
-            return Response({'message': 'If the email exists, a reset link was sent.'})
+                PasswordResetToken.objects.create(user=user, token=token_hash, expires_at=expires)
+
+            response_payload = {
+                'message': 'If an account exists with this email, password reset instructions have been sent.'
+            }
+            # Only expose token in development mode for automated testing/local dev convenience
+            if getattr(settings, 'DEBUG', False) and raw_token:
+                response_payload['reset_token'] = raw_token
+
+            return Response(response_payload, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class PasswordResetConfirmView(views.APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_scope = 'auth'
 
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         if serializer.is_valid():
-            token_str = serializer.validated_data['token']
-            pr_token = PasswordResetToken.objects.filter(token=token_str, is_used=False).first()
+            raw_token = serializer.validated_data['token'].strip()
+            token_hash = hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
+            # Support both hashed token and raw token (for backward compatibility)
+            pr_token = PasswordResetToken.objects.filter(
+                token__in=[token_hash, raw_token],
+                is_used=False
+            ).first()
             if not pr_token or not pr_token.is_valid():
                 return Response({'token': 'Invalid or expired password reset token.'}, status=status.HTTP_400_BAD_REQUEST)
             user = pr_token.user
@@ -177,6 +194,7 @@ class DemoLoginView(views.APIView):
     Demo login endpoint: generates or fetches the demo account with sample data.
     """
     permission_classes = [permissions.AllowAny]
+    throttle_scope = 'auth'
 
     def post(self, request):
         demo_email = 'demo@mintly.app'

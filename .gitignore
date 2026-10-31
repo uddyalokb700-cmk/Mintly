@@ -62,3 +62,8 @@ frontend/dist-ssr/
 *.njsproj
 *.sln
 *.sw?
+
+# Database backups
+backups/
+*.sql
+*.sql.gz

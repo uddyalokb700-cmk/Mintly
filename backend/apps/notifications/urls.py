@@ -7,6 +7,7 @@ from apps.notifications.views import (
     PushSubscriptionView,
     VapidPublicKeyView,
     TriggerMorningGreetingView,
+    QStashNotificationProcessView,
 )
 
 urlpatterns = [
@@ -16,5 +17,6 @@ urlpatterns = [
     path('push-subscriptions/', PushSubscriptionView.as_view(), name='notifications-push-subscriptions'),
     path('vapid-key/', VapidPublicKeyView.as_view(), name='notifications-vapid-key'),
     path('test-morning-greeting/', TriggerMorningGreetingView.as_view(), name='notifications-test-greeting'),
+    path('qstash/process/', QStashNotificationProcessView.as_view(), name='notifications-qstash-process'),
     path('<uuid:pk>/read/', NotificationMarkReadView.as_view(), name='notifications-mark-read'),
 ]

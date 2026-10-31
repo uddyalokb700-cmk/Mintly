@@ -39,3 +39,12 @@ class TransactionSerializer(serializers.ModelSerializer):
         if value <= Decimal('0.00'):
             raise serializers.ValidationError("Transaction amount must be greater than zero.")
         return value
+
+    def validate(self, attrs):
+        category = attrs.get('category')
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        if category and user and user.is_authenticated:
+            if category.user is not None and category.user != user:
+                raise serializers.ValidationError({"category_id": "You cannot select a category belonging to another user."})
+        return attrs
