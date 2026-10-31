@@ -103,8 +103,8 @@ You can deploy using either the Blueprint (`render.yaml`) or manually via the Re
 | `ALLOWED_HOSTS` | `.onrender.com,localhost,127.0.0.1` | Host header protection |
 | `DATABASE_URL` | `postgres://user:pass@ep-...pooler.neon.tech/neondb?sslmode=require` | Neon pooled database |
 | `DB_CONN_MAX_AGE` | `0` | Recommended for PgBouncer |
-| `CORS_ALLOWED_ORIGINS` | `https://mintly.vercel.app` *(update with your Vercel URL)* | Frontend API access |
-| `CSRF_TRUSTED_ORIGINS` | `https://mintly.vercel.app` *(update with your Vercel URL)* | CSRF validation |
+| `CORS_ALLOWED_ORIGINS` | `https://mintly-frontend.vercel.app` *(update with your Vercel URL)* | Frontend API access |
+| `CSRF_TRUSTED_ORIGINS` | `https://mintly-frontend.vercel.app` *(update with your Vercel URL)* | CSRF validation |
 | `QSTASH_CURRENT_SIGNING_KEY` | `sig_...` *(from Upstash)* | Webhook verification |
 | `QSTASH_NEXT_SIGNING_KEY` | `sig_...` *(from Upstash)* | Zero-downtime key rotation |
 | `VAPID_PUBLIC_KEY` | `BA-1zgg-difTLX7c1f-7Q9pEDCIAqcuqK1eZWleFLV5uoELp4pxjaK3gojfea1q_rV2-hglypZavWpfphYC6qJ0` | Push notifications |
@@ -160,7 +160,7 @@ Now that your Render backend URL is live:
 4. Add Environment Variable:
    - **`VITE_API_URL`**: `https://mintly-backend.onrender.com`
 5. Click **Deploy**.
-6. Vercel will build the frontend and assign a production URL (e.g. `https://mintly.vercel.app`).
+6. Vercel will build the frontend and assign a production URL (e.g. `https://mintly-frontend.vercel.app`).
 7. **Important:** If your assigned Vercel URL differs from what you entered in Render's `CORS_ALLOWED_ORIGINS`, update `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` in Render's Environment tab.
 
 ---
@@ -203,17 +203,17 @@ content-type: application/json
 #### 3. Test CORS Headers
 ```bash
 curl -s -I -X OPTIONS https://mintly-backend.onrender.com/api/v1/auth/login/ \
-  -H "Origin: https://mintly.vercel.app" \
+  -H "Origin: https://mintly-frontend.vercel.app" \
   -H "Access-Control-Request-Method: POST"
 ```
 Expected output must contain:
 ```http
-Access-Control-Allow-Origin: https://mintly.vercel.app
+Access-Control-Allow-Origin: https://mintly-frontend.vercel.app
 Access-Control-Allow-Credentials: true
 ```
 
 #### 4. Test Frontend
-Open `https://mintly.vercel.app` in your browser:
+Open `https://mintly-frontend.vercel.app` in your browser:
 - Registration, login, and demo accounts work seamlessly.
 - Dashboard, transaction entry, budget setup, and category breakdowns operate in real-time.
 - Navigating directly to subroutes (e.g. `/budget` or `/analytics`) reloads correctly via [vercel.json](file:///Users/uddyalokbiswas/Desktop/Mintly/frontend/vercel.json).
@@ -230,10 +230,10 @@ Open `https://mintly.vercel.app` in your browser:
 > 3. Valid `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` configured in the Render backend environment.
 
 ### Testing Web Push with a Real Subscription:
-1. Log into `https://mintly.vercel.app`.
+1. Log into `https://mintly-frontend.vercel.app`.
 2. Go to **Settings** -> **Notifications**.
 3. Toggle on **Browser Push Notifications**.
-4. The browser will prompt: *"mintly.vercel.app wants to send you notifications"*. Click **Allow**.
+4. The browser will prompt: *"mintly-frontend.vercel.app wants to send you notifications"*. Click **Allow**.
 5. Mintly's service worker registers the subscription and POSTs the endpoint and cryptographic keys to `/api/v1/notifications/push-subscriptions/`.
 6. Click **Test Notification** in Settings to trigger a test push payload.
 7. Verify the system notification banner appears on your desktop/mobile.
