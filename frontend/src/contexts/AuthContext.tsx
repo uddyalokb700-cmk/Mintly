@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User } from '../types';
 import { api } from '../api/client';
+import { demoStore, DEMO_TOKEN } from '../api/demoStore';
 
 interface AuthContextType {
   user: User | null;
@@ -29,6 +30,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!storedToken) {
       setUser(null);
       setHasBudgetState(false);
+      setIsLoading(false);
+      return;
+    }
+    if (storedToken === DEMO_TOKEN) {
+      setUser(demoStore.getUser());
+      setHasBudgetState(true);
       setIsLoading(false);
       return;
     }
@@ -70,16 +77,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const demoLogin = async () => {
-    const res = await api.post<{ token: string; user: User; has_budget: boolean }>('/auth/demo/');
-    localStorage.setItem('mintly_token', res.token);
-    setToken(res.token);
-    setUser(res.user);
-    setHasBudgetState(res.has_budget);
+    try {
+      const res = await api.post<{ token: string; user: User; has_budget: boolean }>('/auth/demo/');
+      if (res && res.token) {
+        localStorage.setItem('mintly_token', res.token);
+        setToken(res.token);
+        setUser(res.user);
+        setHasBudgetState(res.has_budget ?? true);
+        return;
+      }
+      throw new Error('Invalid demo response');
+    } catch (err) {
+      const fallback = demoStore.initDemoSession();
+      localStorage.setItem('mintly_token', fallback.token);
+      setToken(fallback.token);
+      setUser(fallback.user);
+      setHasBudgetState(fallback.has_budget);
+    }
   };
 
   const logout = () => {
-    api.post('/auth/logout/').catch(() => {});
+    const storedToken = localStorage.getItem('mintly_token');
+    if (storedToken && storedToken !== DEMO_TOKEN) {
+      api.post('/auth/logout/').catch(() => {});
+    }
     localStorage.removeItem('mintly_token');
+    localStorage.removeItem('mintly_demo_mode');
     setToken(null);
     setUser(null);
     setHasBudgetState(false);

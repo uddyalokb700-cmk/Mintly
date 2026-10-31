@@ -1,3 +1,5 @@
+import { demoStore, DEMO_TOKEN } from './demoStore';
+
 const rawApiUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
 const BASE_URL = rawApiUrl
   ? rawApiUrl.endsWith('/api/v1')
@@ -25,6 +27,18 @@ export class ApiError extends Error {
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('mintly_token');
+  const isDemoSession = token === DEMO_TOKEN;
+
+  // If in demo mode, serve from demoStore
+  if (isDemoSession) {
+    try {
+      const demoResult = demoStore.handleDemoRequest(endpoint, options);
+      return demoResult as T;
+    } catch (e: any) {
+      throw new ApiError(400, { detail: e.message || 'Demo request failed' });
+    }
+  }
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
@@ -34,32 +48,62 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers['Authorization'] = `Token ${token}`;
   }
 
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  try {
+    const response = await fetch(`${BASE_URL}${endpoint}`, {
+      ...options,
+      headers,
+    });
 
-  if (response.status === 204) {
-    return {} as T;
-  }
-
-  const contentType = response.headers.get('content-type');
-  let data: any = null;
-  if (contentType && contentType.includes('application/json')) {
-    data = await response.json();
-  } else {
-    data = await response.text();
-  }
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      // Clear token if invalid session
-      localStorage.removeItem('mintly_token');
+    if (response.status === 204) {
+      return {} as T;
     }
-    throw new ApiError(response.status, data);
-  }
 
-  return data as T;
+    const contentType = response.headers.get('content-type') || '';
+    const isJson = contentType.includes('application/json');
+
+    // Detect if Vercel returned HTML SPA fallback (<!DOCTYPE html> or text/html)
+    if (!isJson && contentType.includes('text/html')) {
+      if (endpoint.startsWith('/auth/demo')) {
+        return demoStore.initDemoSession() as unknown as T;
+      }
+      throw new ApiError(503, {
+        detail: `Backend API server is not reachable at ${BASE_URL}. Ensure VITE_API_URL is configured in Vercel settings.`,
+      });
+    }
+
+    let data: any = null;
+    if (isJson) {
+      data = await response.json();
+    } else {
+      data = await response.text();
+    }
+
+    if (!response.ok) {
+      if (endpoint.startsWith('/auth/demo')) {
+        return demoStore.initDemoSession() as unknown as T;
+      }
+      if (response.status === 401) {
+        localStorage.removeItem('mintly_token');
+      }
+      throw new ApiError(response.status, data);
+    }
+
+    if (endpoint.startsWith('/auth/demo') && (!data || typeof data !== 'object' || !data.token)) {
+      return demoStore.initDemoSession() as unknown as T;
+    }
+
+    return data as T;
+  } catch (err: any) {
+    if (endpoint.startsWith('/auth/demo')) {
+      return demoStore.initDemoSession() as unknown as T;
+    }
+    if (err instanceof ApiError) {
+      throw err;
+    }
+    throw new ApiError(500, {
+      detail: err.message || 'Network error connecting to backend service.',
+    });
+  }
 }
 
 export const api = {
@@ -98,6 +142,12 @@ export const api = {
 
   upload: async <T>(endpoint: string, file: File, category: string = 'receipts'): Promise<T> => {
     const token = localStorage.getItem('mintly_token');
+    if (token === DEMO_TOKEN) {
+      return demoStore.handleDemoRequest('/storage/upload', {
+        method: 'POST',
+      }) as T;
+    }
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('category', category);
